@@ -74,3 +74,17 @@ fn prefix_of(pkg: &str) -> &str {
         &pkg[0..1]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn prefix() {
+        use super::prefix_of;
+        assert_eq!("b", prefix_of("bash"));
+        assert_eq!("libb", prefix_of("libbadger"));
+
+        // Who knows what this should do; no examples currently.
+        assert_eq!("b", prefix_of("b"));
+        assert_eq!("liba", prefix_of("liba"));
+    }
+}
