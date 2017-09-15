@@ -4,8 +4,9 @@ error_chain! {
     }
 
     foreign_links {
-        Utf8(::std::string::FromUtf8Error);
         Io(::std::io::Error);
+        Reqwest(::reqwest::Error);
+        Utf8(::std::string::FromUtf8Error);
         Xdg(::xdg::BaseDirectoriesError);
     }
 }

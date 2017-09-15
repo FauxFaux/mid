@@ -35,10 +35,7 @@ pub fn find_repos<P: AsRef<Path>>(from: P) -> Result<Vec<TempRepo>> {
         assert!(cand.pop());
         assert!(cand.pop());
 
-        ret.push(TempRepo {
-            root: cand,
-            mid
-        });
+        ret.push(TempRepo { root: cand, mid });
     }
 
     Ok(ret)
