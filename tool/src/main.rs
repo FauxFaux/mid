@@ -42,19 +42,29 @@ fn run() -> Result<()> {
         ))
         .get_matches();
 
-    let dirs = xdg::BaseDirectories::with_prefix("mid")?;
+    let dirs = xdg::BaseDirectories::with_prefix("mid").chain_err(
+        || "determining XDG base directory",
+    )?;
+
     let config = Config {
-        cache_root: dirs.create_cache_directory("1")?,
+        cache_root: dirs.create_cache_directory("1").chain_err(|| {
+            format!(
+                "creating xdg cache directory inside {:?}",
+                dirs.get_cache_home()
+            )
+        })?,
         casync_mirror: "https://deb-casync.goeswhere.com/".to_string(),
     };
 
     match matches.subcommand() {
         ("debo", Some(matches)) => {
             let pkg = matches.value_of("SOURCE").unwrap();
-            debo::debo(pkg, &config)?;
+            debo::debo(pkg, &config).chain_err(|| {
+                format!("generating debo for '{}'", pkg)
+            })?;
         }
         ("status", Some(_)) => {
-            show_status(&config)?;
+            show_status(&config).chain_err(|| "showing status")?;
         }
         _ => unreachable!(),
     }
@@ -68,7 +78,17 @@ fn show_status(config: &Config) -> Result<()> {
 
     println!();
 
-    let repos = find_repo::find_repos(env::current_dir()?)?;
+    let start = env::current_dir().chain_err(
+        || "determining current directory",
+    )?;
+
+    let repos = find_repo::find_repos(&start).chain_err(|| {
+        format!(
+            "walking up the directory hierarchy finding repositories, start: {:?}",
+            start
+        )
+    })?;
+
     if repos.is_empty() {
         println!("Not in any kind of repo.")
     } else {
