@@ -1,0 +1,10 @@
+[package]
+name = "mid-tool"
+version = "0.1.0"
+authors = ["Chris West (Faux) <git@goeswhere.com>"]
+
+[dependencies]
+casync-http = { path = "../../casync-rs/http" }
+clap = "2.26.1"
+error-chain = "0.10.0"
+xdg = "2.1"
