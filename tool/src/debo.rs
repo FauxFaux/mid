@@ -63,6 +63,8 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
         .fetch_all_chunks(all_required_chunks.iter())
         .chain_err(|| "fetching raw data for package")?;
 
+
+
     unimplemented!()
 }
 

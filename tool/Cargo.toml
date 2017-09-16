@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [dependencies]
 clap = "2.26.1"
+deb-version = "0.1.0"
 error-chain = "0.10.0"
 reqwest = "0.7.3"
 tempfile-fast = "0.1.1"

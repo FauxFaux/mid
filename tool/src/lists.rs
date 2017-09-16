@@ -57,7 +57,9 @@ pub fn sources(client: &Client, config: &::Config) -> Result<HashMap<String, Vec
         let pkg = bits.next()
             .ok_or("invalid blank line in sources list")?
             .to_string();
-        sources.insert(pkg, bits.map(|x| x.to_string()).collect());
+        let mut all_versions: Vec<String> = bits.map(|x| x.to_string()).collect();
+        all_versions.sort_by(|left, right| ::deb_version::compare_versions(left, right));
+        sources.insert(pkg, all_versions);
     }
 
     Ok(sources)
