@@ -2,3 +2,6 @@
 members = [
     "tool",
 ]
+
+[profile.release]
+lto = true

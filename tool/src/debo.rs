@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 
 use std::collections::HashMap;
@@ -5,12 +6,27 @@ use std::collections::HashSet;
 
 use errors::*;
 
+use casync_format;
 use casync_http::Chunk;
 use casync_http::ChunkId;
+use git2::Repository;
 use reqwest;
 
 pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
     let client = reqwest::Client::new()?;
+
+    let dest = {
+        let mut dest = env::current_dir()
+            .chain_err(|| "determining current directory")?
+            .to_path_buf();
+
+        dest.push(pkg);
+        if dest.exists() {
+            bail!("checkout directory already exists: {:?}", dest);
+        }
+
+        dest
+    };
 
     let sources = ::lists::sources(&client, config).chain_err(
         || "fetching sources list",
@@ -63,7 +79,25 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
         .fetch_all_chunks(all_required_chunks.iter())
         .chain_err(|| "fetching raw data for package")?;
 
+    let repo: Repository = Repository::init(&dest).chain_err(|| {
+        format!("creating repository at {:?}", dest)
+    })?;
 
+    for version in versions {
+        let mut chunks = version_chunks.get(version).unwrap().into_iter();
+
+        let reader = casync_format::ChunkReader::new(|| {
+            Ok(match chunks.next() {
+                Some(chunk) => Some(chunk.open_from(repacked_fetcher.local_store())?),
+                None => None,
+            })
+        }).chain_err(|| "initialising reader")?;
+
+        casync_format::read_stream(reader, |path, entry, data| {
+            println!("{:?}", path);
+            Ok(())
+        }).chain_err(|| "reading stream");
+    }
 
     unimplemented!()
 }

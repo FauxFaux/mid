@@ -7,6 +7,7 @@ version = "0.1.0"
 clap = "2.26.1"
 deb-version = "0.1.0"
 error-chain = "0.10.0"
+git2 = "0.6.8"
 reqwest = "0.7.3"
 tempfile-fast = "0.1.1"
 time = "0.1"
@@ -15,3 +16,6 @@ zstd = "0.4.14"
 
 [dependencies.casync-http]
 path = "../../casync-rs/http"
+
+[dependencies.casync-format]
+path = "../../casync-rs/format"

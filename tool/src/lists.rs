@@ -42,6 +42,10 @@ pub fn sources(client: &Client, config: &::Config) -> Result<HashMap<String, Vec
             || "writing downloaded sources to temporary file",
         )?;
 
+        if let Err(e) = fs::remove_file(&path) {
+            // TODO: log ignored warning?
+        }
+
         temp.persist_noclobber(&path).chain_err(|| {
             format!("saving downloaded sources to {:?}", path)
         })?;
