@@ -51,7 +51,7 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
             &client,
             &config.casync_mirror,
             local_cache,
-            "data/origs/default.castr",
+            "data/repacked/default.castr",
         ).chain_err(|| "validating fetcher settings")?
     };
 
@@ -61,7 +61,7 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
     for version in versions {
         let chunks = repacked_fetcher
             .parse_whole_index(format!(
-                "data/origs/{}/{}/{}.caidx",
+                "data/repacked/{}/{}/{}.caidx",
                 prefix_of(pkg),
                 pkg,
                 version
