@@ -104,12 +104,19 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
             }
 
             let oid = {
-                let mut writer = repo.blob_writer(None).map_err(|e| format!("TODO git error: {}", e))?;
+                let mut writer = repo.blob_writer(None).map_err(
+                    |e| format!("TODO git error: {}", e),
+                )?;
 
                 // TODO: symlinks
-                io::copy(&mut data.ok_or("expecting data for a non-directory")?, &mut writer)?;
+                io::copy(
+                    &mut data.ok_or("expecting data for a non-directory")?,
+                    &mut writer,
+                )?;
 
-                writer.commit().map_err(|e| format!("TODO git error: {}", e))?
+                writer.commit().map_err(
+                    |e| format!("TODO git error: {}", e),
+                )?
             };
 
             write_map(&mut tree, path, oid, 0o100644);
@@ -123,18 +130,27 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
     unimplemented!()
 }
 
-fn write_map(mut into: &mut HashMap<Vec<u8>, GitNode>, path: &[Vec<u8>], oid: git2::Oid, mode: i32) {
+fn write_map(
+    mut into: &mut HashMap<Vec<u8>, GitNode>,
+    path: &[Vec<u8>],
+    oid: git2::Oid,
+    mode: i32,
+) {
     use std::collections::hash_map::Entry::*;
 
     match path.len() {
         0 => unreachable!(),
-        1 => { into.insert(path[0].clone(), GitNode::File { oid, mode }); },
+        1 => {
+            into.insert(path[0].clone(), GitNode::File { oid, mode });
+        }
         _ => {
             match into.entry(path[0].clone()) {
-                Occupied(mut exists) => match exists.get_mut() {
-                    &mut GitNode::Dir(ref mut map) => write_map(map, &path[1..], oid, mode),
-                    _ => panic!("TODO: invalid directory stream"),
-                },
+                Occupied(mut exists) => {
+                    match exists.get_mut() {
+                        &mut GitNode::Dir(ref mut map) => write_map(map, &path[1..], oid, mode),
+                        _ => panic!("TODO: invalid directory stream"),
+                    }
+                }
                 Vacant(vacancy) => {
                     let mut map = HashMap::new();
                     write_map(&mut map, &path[1..], oid, mode);
@@ -150,7 +166,7 @@ fn write_tree(repo: &Repository, from: HashMap<Vec<u8>, GitNode>) -> Result<git2
     for (path, thing) in from {
         let (oid, mode) = match thing {
             GitNode::File { oid, mode } => (oid, mode),
-            GitNode::Dir(entries) => (write_tree(repo, entries)?, 0o040000)
+            GitNode::Dir(entries) => (write_tree(repo, entries)?, 0o040000),
         };
 
         builder.insert(path, oid, mode)?;
@@ -161,10 +177,7 @@ fn write_tree(repo: &Repository, from: HashMap<Vec<u8>, GitNode>) -> Result<git2
 
 enum GitNode {
     Dir(HashMap<Vec<u8>, GitNode>),
-    File {
-        oid: git2::Oid,
-        mode: i32,
-    }
+    File { oid: git2::Oid, mode: i32 },
 }
 
 fn prefix_of(pkg: &str) -> &str {
