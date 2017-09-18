@@ -4,6 +4,7 @@ error_chain! {
     }
 
     foreign_links {
+        Git(::git2::Error);
         Io(::std::io::Error);
         Reqwest(::reqwest::Error);
         Utf8(::std::string::FromUtf8Error);

@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::io;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -93,10 +94,38 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
             })
         }).chain_err(|| "initialising reader")?;
 
+        let mut tree = repo.treebuilder(None)?;
+
         casync_format::read_stream(reader, |path, entry, data| {
-            println!("{:?}", path);
+            if entry.is_dir() {
+                // just totally ignoring directories
+                return Ok(());
+            }
+
+            let raw_path: Vec<u8> = path.join(&b'/');
+
+            println!("{:?} {:?} {:?}", path, raw_path.clone(), String::from_utf8(raw_path.clone()));
+
+            let oid = {
+                let mut writer = repo.blob_writer(None).map_err(|e| format!("TODO git error: {}", e))?;
+
+                // TODO: symlinks
+                io::copy(&mut data.ok_or("expecting data for a non-directory")?, &mut writer)?;
+
+                writer.commit().map_err(|e| format!("TODO git error: {}", e))?
+            };
+
+            tree.insert(
+                raw_path,
+                oid,
+                // TODO: executable, symlink
+                0o100644,
+            ).map_err(|e| format!("TODO git error: {}", e))?;
+
             Ok(())
-        }).chain_err(|| "reading stream");
+        }).chain_err(|| "reading stream")?;
+
+        let oid = tree.write()?;
     }
 
     unimplemented!()
