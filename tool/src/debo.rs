@@ -37,11 +37,58 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
 
     // TODO: strsim matching
     // TODO: check binary package names
-    let versions = sources.get(pkg).ok_or("package not found")?;
+    let versions: &Vec<String> = sources.get(pkg).ok_or("package not found")?;
 
-    let repacked_fetcher = {
+    let repacked_chunks = download(&client, config, "repacked", pkg, &versions)?;
+    let debdir_chunks = download(&client, config, "debdir", pkg, &versions)?;
+
+    let repo: Repository = Repository::init(&dest).chain_err(|| {
+        format!("creating repository at {:?}", dest)
+    })?;
+
+    let mid_signature = git2::Signature::new("mid", "mid@goeswhere.com", &git2::Time::new(0, 0))?;
+    let mut previous_commit = None;
+
+    for version in versions {
+
+        let repacked_tree = chunks_to_tree(
+            &repo,
+            &repacked_chunks.downloaded_into,
+            repacked_chunks.by_version.get(version).unwrap().into_iter(),
+        )?;
+
+        let commit = repo.find_commit(repo.commit(
+            Some("refs/heads/repacked"),
+            &mid_signature,
+            &mid_signature,
+            &format!("Repacked {}:{}", pkg, version),
+            &repacked_tree,
+            &previous_commit
+                .iter()
+                .collect::<Vec<&git2::Commit>>(),
+        )?)?;
+
+        previous_commit = Some(commit);
+    }
+
+    Ok(())
+}
+
+struct DownloadedChunks {
+    downloaded_into: path::PathBuf,
+    by_version: HashMap<String, Vec<Chunk>>,
+}
+
+fn download(
+    client: &reqwest::Client,
+    config: &::Config,
+    mirror_type: &str,
+    pkg: &str,
+    versions: &[String],
+) -> Result<DownloadedChunks> {
+    let fetcher = {
         let mut local_cache = config.cache_root.clone();
-        local_cache.push("repacked.castr");
+        local_cache.push(format!("{}.castr", mirror_type));
 
         fs::create_dir_all(&local_cache).chain_err(|| {
             format!("creating cache directory: {:?}", local_cache)
@@ -51,7 +98,7 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
             &client,
             &config.casync_mirror,
             local_cache,
-            "data/repacked/default.castr",
+            &format!("data/{}/default.castr", mirror_type),
         ).chain_err(|| "validating fetcher settings")?
     };
 
@@ -59,9 +106,10 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
     let mut all_required_chunks: HashSet<ChunkId> = HashSet::new();
 
     for version in versions {
-        let chunks = repacked_fetcher
+        let chunks = fetcher
             .parse_whole_index(format!(
-                "data/repacked/{}/{}/{}.caidx",
+                "data/{}/{}/{}/{}.caidx",
+                mirror_type,
                 prefix_of(pkg),
                 pkg,
                 version
@@ -78,40 +126,14 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
         version_chunks.insert(version.to_string(), chunks);
     }
 
-    repacked_fetcher
+    fetcher
         .fetch_all_chunks(all_required_chunks.iter())
         .chain_err(|| "fetching raw data for package")?;
 
-    let repo: Repository = Repository::init(&dest).chain_err(|| {
-        format!("creating repository at {:?}", dest)
-    })?;
-
-    let mid_signature = git2::Signature::new("mid", "mid@goeswhere.com", &git2::Time::new(0, 0))?;
-    let mut previous_commit = None;
-
-    for version in versions {
-
-        let tree = chunks_to_tree(
-            &repo,
-            repacked_fetcher.local_store(),
-            version_chunks.get(version).unwrap().into_iter(),
-        )?;
-
-        let commit = repo.find_commit(repo.commit(
-            Some("refs/heads/repacked"),
-            &mid_signature,
-            &mid_signature,
-            &format!("Repacked {}:{}", pkg, version),
-            &tree,
-            &previous_commit
-                .iter()
-                .collect::<Vec<&git2::Commit>>(),
-        )?)?;
-
-        previous_commit = Some(commit);
-    }
-
-    Ok(())
+    Ok(DownloadedChunks {
+        downloaded_into: fetcher.local_store(),
+        by_version: version_chunks,
+    })
 }
 
 fn chunks_to_tree<'i, I, P: AsRef<path::Path>>(
