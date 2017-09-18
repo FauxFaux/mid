@@ -85,6 +85,9 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
         format!("creating repository at {:?}", dest)
     })?;
 
+    let mid_signature = git2::Signature::new("mid", "mid@goeswhere.com", &git2::Time::new(0, 0))?;
+    let mut previous_commit = None;
+
     for version in versions {
         let mut chunks = version_chunks.get(version).unwrap().into_iter();
 
@@ -141,10 +144,23 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
             Ok(())
         }).chain_err(|| "reading stream")?;
 
-        let oid = write_tree(&repo, tree)?;
+        let tree = repo.find_tree(write_tree(&repo, tree)?)?;
+
+        let commit = repo.find_commit(repo.commit(
+            Some("refs/heads/repacked"),
+            &mid_signature,
+            &mid_signature,
+            &format!("Repacked {}:{}", pkg, version),
+            &tree,
+            &previous_commit
+                .iter()
+                .collect::<Vec<&git2::Commit>>(),
+        )?)?;
+
+        previous_commit = Some(commit);
     }
 
-    unimplemented!()
+    Ok(())
 }
 
 fn write_map(
