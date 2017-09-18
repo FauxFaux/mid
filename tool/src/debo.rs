@@ -104,9 +104,20 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
             }
 
             let oid = {
-                let mut writer = repo.blob_writer(None).map_err(
-                    |e| format!("TODO git error: {}", e),
-                )?;
+                // TODO: the blob_writer api isn't ideal here; libgit2-c suggests using
+                // TODO: `git_odb_open_wstream` if you know the size, which currently isn't exposed.
+                // TODO: I suspect that we can get a speedup by reading up to a megabyte(?) into
+                // TODO: memory, and dumping that all out through the `repo.blob` api.
+
+                let mut writer = repo.blob_writer(None).map_err(|e| {
+                    format!(
+                        concat!(
+                            "git couldn't prepare to write a blob",
+                            " (TODO: extra error information lost): {}"
+                        ),
+                        e
+                    )
+                })?;
 
                 // TODO: symlinks
                 io::copy(
@@ -114,9 +125,15 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
                     &mut writer,
                 )?;
 
-                writer.commit().map_err(
-                    |e| format!("TODO git error: {}", e),
-                )?
+                writer.commit().map_err(|e| {
+                    format!(
+                        concat!(
+                            "git couldn't write the blob out",
+                            " (TODO: extra error information lost): {}"
+                        ),
+                        e
+                    )
+                })?
             };
 
             write_map(&mut tree, path, oid, 0o100644);
