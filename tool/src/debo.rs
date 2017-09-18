@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 use std::io;
+use std::path;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -89,62 +90,12 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
     let mut previous_commit = None;
 
     for version in versions {
-        let mut chunks = version_chunks.get(version).unwrap().into_iter();
 
-        let reader = casync_format::ChunkReader::new(|| {
-            Ok(match chunks.next() {
-                Some(chunk) => Some(chunk.open_from(repacked_fetcher.local_store())?),
-                None => None,
-            })
-        }).chain_err(|| "initialising reader")?;
-
-        let mut tree: HashMap<Vec<u8>, GitNode> = HashMap::new();
-
-        casync_format::read_stream(reader, |path, entry, data| {
-            if entry.is_dir() {
-                // just totally ignoring directories
-                return Ok(());
-            }
-
-            let oid = {
-                // TODO: the blob_writer api isn't ideal here; libgit2-c suggests using
-                // TODO: `git_odb_open_wstream` if you know the size, which currently isn't exposed.
-                // TODO: I suspect that we can get a speedup by reading up to a megabyte(?) into
-                // TODO: memory, and dumping that all out through the `repo.blob` api.
-
-                let mut writer = repo.blob_writer(None).map_err(|e| {
-                    format!(
-                        concat!(
-                            "git couldn't prepare to write a blob",
-                            " (TODO: extra error information lost): {}"
-                        ),
-                        e
-                    )
-                })?;
-
-                // TODO: symlinks
-                io::copy(
-                    &mut data.ok_or("expecting data for a non-directory")?,
-                    &mut writer,
-                )?;
-
-                writer.commit().map_err(|e| {
-                    format!(
-                        concat!(
-                            "git couldn't write the blob out",
-                            " (TODO: extra error information lost): {}"
-                        ),
-                        e
-                    )
-                })?
-            };
-
-            write_map(&mut tree, path, oid, 0o100644);
-
-            Ok(())
-        }).chain_err(|| "reading stream")?;
-
-        let tree = repo.find_tree(write_tree(&repo, tree)?)?;
+        let tree = chunks_to_tree(
+            &repo,
+            repacked_fetcher.local_store(),
+            version_chunks.get(version).unwrap().into_iter(),
+        )?;
 
         let commit = repo.find_commit(repo.commit(
             Some("refs/heads/repacked"),
@@ -161,6 +112,72 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn chunks_to_tree<'i, I, P: AsRef<path::Path>>(
+    repo: &Repository,
+    local_store: P,
+    mut chunks: I,
+) -> Result<git2::Tree>
+where
+    I: Iterator<Item = &'i Chunk>,
+{
+    let local_store = local_store.as_ref();
+
+    let reader = casync_format::ChunkReader::new(|| {
+        Ok(match chunks.next() {
+            Some(chunk) => Some(chunk.open_from(local_store)?),
+            None => None,
+        })
+    }).chain_err(|| "initialising reader")?;
+
+    let mut tree: HashMap<Vec<u8>, GitNode> = HashMap::new();
+
+    casync_format::read_stream(reader, |path, entry, data| {
+        if entry.is_dir() {
+            // just totally ignoring directories
+            return Ok(());
+        }
+
+        let oid = {
+            // TODO: the blob_writer api isn't ideal here; libgit2-c suggests using
+            // TODO: `git_odb_open_wstream` if you know the size, which currently isn't exposed.
+            // TODO: I suspect that we can get a speedup by reading up to a megabyte(?) into
+            // TODO: memory, and dumping that all out through the `repo.blob` api.
+
+            let mut writer = repo.blob_writer(None).map_err(|e| {
+                format!(
+                    concat!(
+                        "git couldn't prepare to write a blob",
+                        " (TODO: extra error information lost): {}"
+                    ),
+                    e
+                )
+            })?;
+
+            // TODO: symlinks
+            io::copy(
+                &mut data.ok_or("expecting data for a non-directory")?,
+                &mut writer,
+            )?;
+
+            writer.commit().map_err(|e| {
+                format!(
+                    concat!(
+                        "git couldn't write the blob out",
+                        " (TODO: extra error information lost): {}"
+                    ),
+                    e
+                )
+            })?
+        };
+
+        write_map(&mut tree, path, oid, 0o100644);
+
+        Ok(())
+    }).chain_err(|| "reading stream")?;
+
+    Ok(repo.find_tree(write_tree(&repo, tree)?)?)
 }
 
 fn write_map(
