@@ -194,6 +194,7 @@ where
             // TODO: `git_odb_open_wstream` if you know the size, which currently isn't exposed.
             // TODO: I suspect that we can get a speedup by reading up to a megabyte(?) into
             // TODO: memory, and dumping that all out through the `repo.blob` api.
+            // TODO: Pull request here: https://github.com/alexcrichton/git2-rs/issues/238
 
             let mut writer = repo.blob_writer(None).map_err(|e| {
                 format!(
