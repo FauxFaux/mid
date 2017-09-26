@@ -47,7 +47,8 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
     })?;
 
     let mid_signature = git2::Signature::new("mid", "mid@goeswhere.com", &git2::Time::new(0, 0))?;
-    let mut previous_commit = None;
+    let mut previous_repacked_commit = None;
+    let mut previous_debdir_commit = None;
 
     for version in versions {
 
@@ -57,18 +58,45 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
             repacked_chunks.by_version.get(version).unwrap().into_iter(),
         )?;
 
-        let commit = repo.find_commit(repo.commit(
+        let repacked_commit = repo.find_commit(repo.commit(
             Some("refs/heads/repacked"),
             &mid_signature,
             &mid_signature,
             &format!("Repacked {}:{}", pkg, version),
             &repacked_tree,
-            &previous_commit
+            &previous_repacked_commit
                 .iter()
                 .collect::<Vec<&git2::Commit>>(),
         )?)?;
 
-        previous_commit = Some(commit);
+        let debian_tree = chunks_to_tree(
+            &repo,
+            &debdir_chunks.downloaded_into,
+            debdir_chunks.by_version.get(version).unwrap().into_iter(),
+        )?;
+
+        let mut with_deb = repo.treebuilder(Some(&repacked_tree))?;
+        with_deb.insert("debian", debian_tree.id(), 0o040000)?;
+        let with_deb = repo.find_tree(with_deb.write()?)?;
+
+        let debdir_commit = {
+            let mut parents: Vec<&git2::Commit> = previous_debdir_commit
+                .iter()
+                .collect::<Vec<&git2::Commit>>();
+            parents.push(&repacked_commit);
+
+            repo.find_commit(repo.commit(
+                Some(&format!("refs/heads/skip-patches-{}", version)),
+                &mid_signature,
+                &mid_signature,
+                &format!("Adding /debian/ from {}:{}", pkg, version),
+                &with_deb,
+                &parents,
+            )?)
+        }?;
+
+        previous_debdir_commit = Some(debdir_commit);
+        previous_repacked_commit = Some(repacked_commit);
     }
 
     Ok(())
