@@ -14,21 +14,19 @@ use errors::*;
 pub fn sources(client: &Client, config: &::Config) -> Result<HashMap<String, Vec<String>>> {
     let mut path = config.cache_root.clone();
     path.push("lists");
-    fs::create_dir_all(&path).chain_err(|| {
-        format!("creating lists directory at {:?}", path)
-    })?;
+    fs::create_dir_all(&path).chain_err(|| format!("creating lists directory at {:?}", path))?;
 
     path.push("sources.zstd");
 
     if outdated(&path).chain_err(|| {
         format!("checking if sources list ({:?}) is outdated", path)
-    })?
-    {
+    })? {
         let url = format!("{}/data/sources.zstd", config.casync_mirror);
 
-        let mut resp = client.get(&url).send().chain_err(
-            || format!("downloading {}", url),
-        )?;
+        let mut resp = client
+            .get(&url)
+            .send()
+            .chain_err(|| format!("downloading {}", url))?;
 
         if !resp.status().is_success() {
             bail!("downloading {} failed: {}", url, resp.status());
@@ -38,17 +36,15 @@ pub fn sources(client: &Client, config: &::Config) -> Result<HashMap<String, Vec
             .chain_err(|| "creating download temporary file")?;
 
         // TODO: length checks?
-        io::copy(&mut resp, temp.as_mut()).chain_err(
-            || "writing downloaded sources to temporary file",
-        )?;
+        io::copy(&mut resp, temp.as_mut())
+            .chain_err(|| "writing downloaded sources to temporary file")?;
 
         if let Err(e) = fs::remove_file(&path) {
             // TODO: log ignored warning?
         }
 
-        temp.persist_noclobber(&path).chain_err(|| {
-            format!("saving downloaded sources to {:?}", path)
-        })?;
+        temp.persist_noclobber(&path)
+            .chain_err(|| format!("saving downloaded sources to {:?}", path))?;
     }
 
     let mut sources: HashMap<String, Vec<String>> = HashMap::with_capacity(30_000);

@@ -54,9 +54,9 @@ pub fn parse(blob: &[u8]) -> Result<Patch> {
                 String::from_utf8(trailer.to_vec())
             );
 
-            line = lines.next().ok_or(
-                "a patch line must follow an index block",
-            )?;
+            line = lines
+                .next()
+                .ok_or("a patch line must follow an index block")?;
         }
 
         ensure!(line.starts_with(b"--- "), "a removal path is missing");

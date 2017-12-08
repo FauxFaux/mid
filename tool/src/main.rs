@@ -19,7 +19,7 @@ mod patch;
 use std::env;
 use std::path;
 
-use clap::{Arg, App, AppSettings, SubCommand};
+use clap::{App, AppSettings, Arg, SubCommand};
 
 use errors::*;
 
@@ -41,14 +41,11 @@ fn run() -> Result<()> {
                         .required(true),
                 ),
         )
-        .subcommand(SubCommand::with_name("status").about(
-            "show what we think is going on",
-        ))
+        .subcommand(SubCommand::with_name("status").about("show what we think is going on"))
         .get_matches();
 
-    let dirs = xdg::BaseDirectories::with_prefix("mid").chain_err(
-        || "determining XDG base directory",
-    )?;
+    let dirs =
+        xdg::BaseDirectories::with_prefix("mid").chain_err(|| "determining XDG base directory")?;
 
     let config = Config {
         cache_root: dirs.create_cache_directory("1").chain_err(|| {
@@ -63,9 +60,7 @@ fn run() -> Result<()> {
     match matches.subcommand() {
         ("debo", Some(matches)) => {
             let pkg = matches.value_of("SOURCE").unwrap();
-            debo::debo(pkg, &config).chain_err(|| {
-                format!("generating debo for '{}'", pkg)
-            })?;
+            debo::debo(pkg, &config).chain_err(|| format!("generating debo for '{}'", pkg))?;
         }
         ("status", Some(_)) => {
             show_status(&config).chain_err(|| "showing status")?;
@@ -82,9 +77,7 @@ fn show_status(config: &Config) -> Result<()> {
 
     println!();
 
-    let start = env::current_dir().chain_err(
-        || "determining current directory",
-    )?;
+    let start = env::current_dir().chain_err(|| "determining current directory")?;
 
     let repos = find_repo::find_repos(&start).chain_err(|| {
         format!(

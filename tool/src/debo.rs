@@ -33,9 +33,7 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
         dest
     };
 
-    let sources = ::lists::sources(&client, config).chain_err(
-        || "fetching sources list",
-    )?;
+    let sources = ::lists::sources(&client, config).chain_err(|| "fetching sources list")?;
 
     // TODO: strsim matching
     // TODO: check binary package names
@@ -44,16 +42,14 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
     let repacked_chunks = download(&client, config, "repacked", pkg, &versions)?;
     let debdir_chunks = download(&client, config, "debdir", pkg, &versions)?;
 
-    let repo: Repository = Repository::init(&dest).chain_err(|| {
-        format!("creating repository at {:?}", dest)
-    })?;
+    let repo: Repository =
+        Repository::init(&dest).chain_err(|| format!("creating repository at {:?}", dest))?;
 
     let mid_signature = git2::Signature::new("mid", "mid@goeswhere.com", &git2::Time::new(0, 0))?;
     let mut previous_repacked_commit = None;
     let mut previous_debdir_commit = None;
 
     for version in versions {
-
         let repacked_tree = chunks_to_tree(
             &repo,
             &repacked_chunks.downloaded_into,
@@ -104,11 +100,8 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
 
         match source_format.as_str() {
             "3.0 (quilt)" => {
-                for patch in read_blob_at(&repo, &debian_tree, "patches/series")?.split(
-                    |x| {
-                        *x == b'\n'
-                    },
-                )
+                for patch in
+                    read_blob_at(&repo, &debian_tree, "patches/series")?.split(|x| *x == b'\n')
                 {
                     if patch.is_empty() || b'#' == patch[0] {
                         continue;
@@ -117,7 +110,6 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
                     // TODO: could not require utf-8 here
                     let mut path = format!("patches/{}", String::from_utf8(patch.to_vec())?);
                     let patch = patch::parse(&read_blob_at(&repo, &debian_tree, &path)?);
-
                 }
             }
             other => {
@@ -159,9 +151,8 @@ fn download(
         let mut local_cache = config.cache_root.clone();
         local_cache.push(format!("{}.castr", mirror_type));
 
-        fs::create_dir_all(&local_cache).chain_err(|| {
-            format!("creating cache directory: {:?}", local_cache)
-        })?;
+        fs::create_dir_all(&local_cache)
+            .chain_err(|| format!("creating cache directory: {:?}", local_cache))?;
 
         ::casync_http::Fetcher::new(
             client,
@@ -285,21 +276,17 @@ fn write_map(
         1 => {
             into.insert(path[0].clone(), GitNode::File { oid, mode });
         }
-        _ => {
-            match into.entry(path[0].clone()) {
-                Occupied(mut exists) => {
-                    match exists.get_mut() {
-                        &mut GitNode::Dir(ref mut map) => write_map(map, &path[1..], oid, mode),
-                        _ => panic!("TODO: invalid directory stream"),
-                    }
-                }
-                Vacant(vacancy) => {
-                    let mut map = HashMap::new();
-                    write_map(&mut map, &path[1..], oid, mode);
-                    vacancy.insert(GitNode::Dir(map));
-                }
+        _ => match into.entry(path[0].clone()) {
+            Occupied(mut exists) => match exists.get_mut() {
+                &mut GitNode::Dir(ref mut map) => write_map(map, &path[1..], oid, mode),
+                _ => panic!("TODO: invalid directory stream"),
+            },
+            Vacant(vacancy) => {
+                let mut map = HashMap::new();
+                write_map(&mut map, &path[1..], oid, mode);
+                vacancy.insert(GitNode::Dir(map));
             }
-        }
+        },
     }
 }
 
