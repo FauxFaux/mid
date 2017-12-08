@@ -14,6 +14,7 @@ mod debo;
 mod errors;
 mod find_repo;
 mod lists;
+mod patch;
 
 use std::env;
 use std::path;

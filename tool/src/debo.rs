@@ -1,4 +1,5 @@
 use std::env;
+use std::ffi;
 use std::fs;
 use std::io;
 use std::path;
@@ -7,6 +8,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use errors::*;
+use patch;
 
 use casync_format;
 use casync_http::Chunk;
@@ -16,7 +18,7 @@ use git2::Repository;
 use reqwest;
 
 pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
-    let client = reqwest::Client::new()?;
+    let client = reqwest::Client::new();
 
     let dest = {
         let mut dest = env::current_dir()
@@ -95,11 +97,50 @@ pub fn debo(pkg: &str, config: &::Config) -> Result<()> {
             )?)
         }?;
 
+        let source_format = match read_blob_at(&repo, &debian_tree, "source/format") {
+            Ok(contents) => String::from_utf8(contents)?.trim().to_string(),
+            Err(_) => "1.0 (unknown)".to_string(),
+        };
+
+        match source_format.as_str() {
+            "3.0 (quilt)" => {
+                for patch in read_blob_at(&repo, &debian_tree, "patches/series")?.split(
+                    |x| {
+                        *x == b'\n'
+                    },
+                )
+                {
+                    if patch.is_empty() || b'#' == patch[0] {
+                        continue;
+                    }
+
+                    // TODO: could not require utf-8 here
+                    let mut path = format!("patches/{}", String::from_utf8(patch.to_vec())?);
+                    let patch = patch::parse(&read_blob_at(&repo, &debian_tree, &path)?);
+
+                }
+            }
+            other => {
+                println!("UNSUPPORTED: {}", other);
+            }
+        }
+
         previous_debdir_commit = Some(debdir_commit);
         previous_repacked_commit = Some(repacked_commit);
     }
 
     Ok(())
+}
+
+fn read_blob_at(repo: &Repository, tree: &git2::Tree, path: &str) -> Result<Vec<u8>> {
+    Ok(
+        tree.get_path(path::Path::new(path))?
+            .to_object(&repo)?
+            .as_blob()
+            .ok_or("not a blob")?
+            .content()
+            .to_vec(),
+    )
 }
 
 struct DownloadedChunks {
@@ -123,7 +164,7 @@ fn download(
         })?;
 
         ::casync_http::Fetcher::new(
-            &client,
+            client,
             &config.casync_mirror,
             local_cache,
             &format!("data/{}/default.castr", mirror_type),

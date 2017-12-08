@@ -26,7 +26,7 @@ pub fn sources(client: &Client, config: &::Config) -> Result<HashMap<String, Vec
     {
         let url = format!("{}/data/sources.zstd", config.casync_mirror);
 
-        let mut resp = client.get(&url)?.send().chain_err(
+        let mut resp = client.get(&url).send().chain_err(
             || format!("downloading {}", url),
         )?;
 
